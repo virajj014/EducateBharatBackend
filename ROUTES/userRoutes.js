@@ -2,7 +2,9 @@ const express = require('express');
 const app = express.Router();
 const mongoose = require('mongoose');
 const User = mongoose.model('User');
+const Order = mongoose.model('Order');
 const Purchase = mongoose.model('Purchase');
+const Course = mongoose.model('Course');
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
@@ -101,8 +103,6 @@ app.get('/getuserdatafromtoken', async (req, res) => {
             })
     }
 });
-
-
 app.post('/resetpassword', (req, res) => {
     const { newpassword } = req.body;
 
@@ -134,9 +134,6 @@ app.post('/resetpassword', (req, res) => {
             })
     }
 })
-
-
-
 app.get('/latestusers', (req, res) => {
     // return max 10 users in latest date order
     User.find().sort({ createdAt: -1 }).limit(10)
@@ -156,9 +153,6 @@ app.get('/latestusers', (req, res) => {
         }
         )
 });
-
-
-
 // BUY COURSE
 app.post('/buyCourse', (req, res) => {
     const token = req.headers.authorization.split(" ")[1];
@@ -211,6 +205,7 @@ app.post('/buyCourse', (req, res) => {
 
 // add to cart
 app.post('/addToCart', (req, res) => {
+    console.log("inside add to cart");
     const token = req.headers.authorization.split(" ")[1];
 
     const { fullproduct,
@@ -278,7 +273,8 @@ app.get('/getCart', (req, res) => {
     }
 });
 app.delete('/deleteCart', (req, res) => {
-   const token = req.headers.authorization.split(" ")[1];
+
+    const token = req.headers.authorization.split(" ")[1];
     const { cartitemId } = req.body;
 
     if (!cartitemId) {
@@ -294,7 +290,7 @@ app.delete('/deleteCart', (req, res) => {
                 user.userCart = user.userCart.filter(cart => cart.cartitemId !== cartitemId);
                 user.save()
                     .then(user => {
-                        res.json({ message: "Deleted Successfully" , userCart: user.userCart});
+                        res.json({ message: "Deleted Successfully", userCart: user.userCart });
                     })
                     .catch(err => {
                         console.log(err);
@@ -306,6 +302,341 @@ app.delete('/deleteCart', (req, res) => {
             })
     }
 });
+
+
+app.post('/buyProducts', (req, res) => {
+    const { cartdata,
+        cartTotal,
+        paymentMethod,
+        paymentId,
+        shipping,
+        tax, address } = req.body;
+
+    if (!cartdata || !cartTotal || !paymentMethod || !shipping || !tax || !address || !paymentId) {
+        res.json({
+            error: "Retry"
+        });
+    }
+
+
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+
+
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            const order = new Order({
+                orderItems: cartdata,
+                shippingAddress: address,
+                paymentMethod: paymentMethod,
+                paymentId: paymentId,
+                carttotal: cartTotal,
+                userId: _id,
+                shippingCost: shipping,
+                tax: tax,
+                isPaid: paymentMethod !== "COD" ? true : false,
+                paidAt: paymentMethod !== "COD" ? Date.now() : null,
+            });
+
+            order.save()
+                .then(order => {
+                    let orderid = order._id;
+                    user.orders.push({
+                        orderid: orderid,
+                        createdAt: order.createdAt,
+                    });
+                    // user.userCart = [];
+                    user.save()
+                        .then(user => {
+                            res.json({ message: "Order Placed Successfully", userCart: user.userCart, order });
+                        })
+                })
+        })
+        .catch(err => {
+            console.log('err getting user data from token ', err)
+        })
+
+
+
+})
+
+app.get('/getUserAddress', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            res.status(200).json({
+                address: user.address
+            });
+        })
+});
+
+app.post('/addUserAddress', (req, res) => {
+    console.log("inside add user address");
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+    const { address } = req.body;
+
+    if (!address) {
+        res.json({
+            error: "Retry"
+
+        });
+    }
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            user.address = address;
+            user.save()
+                .then(user => {
+                    res.status(200).json({
+                        address: user.address
+                    });
+                })
+                .catch(err => {
+                    console.log(err);
+                    return res.status(422).json({ error: "Server Error" });
+                })
+        })
+        .catch(err => {
+            console.log('err getting user data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
+app.get('/getOrders', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            res.status(200).json({
+                orders: user.orders
+            });
+        }).catch(err => {
+            console.log('err getting user data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
+app.post('/getOrderById', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+    const { orderId } = req.body;
+
+    if (!orderId) {
+        res.json({
+            error: "Retry"
+        });
+    }
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            //  check if order id is present in user orders
+            if (user.orders.filter(order => order.orderid === orderId).length === 0) {
+                Order.findOne({ _id: orderId })
+                    .then(order => {
+                        res.status(200).json({
+                            order: order
+                        });
+                    })
+                    .catch(err => {
+                        console.log('err getting order data from token ', err)
+                        res.json({
+                            error: "Server Error"
+                        });
+                    });
+            }
+        })
+        .catch(err => {
+            console.log('err getting user data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
+app.post('/cancelOrder', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+    const { orderId } = req.body;
+
+    User.findOne({ _id: _id })
+        .then(user => {
+            // check if order id is present in user orders
+            if (user.orders.includes(orderId)) {
+                Order.findOne({ _id: orderId })
+                    .then(order => {
+                        // check if order is not delivered
+                        if (order.isDelivered === false) {
+                            order.isCancelled = true;
+                            order.save()
+                                .then(order => {
+                                    res.status(200).json({
+                                        order: order,
+                                        message: "Order Cancelled Successfully"
+                                    });
+                                })
+                                .catch(err => {
+                                    console.log('err getting order data from token ', err)
+                                    res.json({
+                                        error: "Server Error"
+                                    });
+                                });
+                        }
+                        if (order.isDelivered === true) {
+                            res.json({
+                                error: "Order Already Delivered"
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        console.log('err getting order data from token ', err)
+                        res.json({
+                            error: "Server Error"
+                        });
+                    }
+                    );
+            }
+            else {
+                res.json({
+                    error: "Order Not Found"
+                });
+            }
+        })
+        .catch(err => {
+            res.json({
+                error: "User Not Found"
+            });
+        });
+})
+
+
+app.get('/getMyCourses', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+
+    User.findOne({ _id: _id })
+        .then(async user => {
+            let courses = [];
+            for (const courseId in user.coursePurchased) {
+                if (user.coursePurchased.hasOwnProperty(courseId)) {
+                    try {
+                        const course = await Course.findOne({ _id: user.coursePurchased[courseId] });
+                        courses.push(course);
+                    } catch (err) {
+                        console.log('err getting course data from token ', err);
+                        res.json({
+                            error: "Server Error"
+                        });
+                    }
+                }
+            }
+            // console.log(courses);
+
+            res.status(200).json({
+                courses: courses
+            });
+
+        })
+        .catch(err => {
+            res.json({
+                error: "User Not Found"
+            });
+        })
+})
+
+
+
+// get 10 oldest undelivered orders and not cancelled of all users
+app.get('/getUndeliveredOrdersAdmin', (req, res) => {
+    Order.find({ isDelivered: 'Not Delivered', isCancelled: false })
+        .sort({ createdAt: 1 })
+        .limit(10)
+        .then(orders => {
+            res.status(200).json({
+                orders: orders
+            });
+        })
+        .catch(err => {
+            console.log('err getting order data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
+
+
+app.post('/getOrderByIdAdmin', (req, res) => {
+
+    const { orderId } = req.body;
+
+    if (!orderId) {
+        res.json({
+            error: "Retry"
+        });
+    }
+    Order.findOne({ _id: orderId })
+        .then(order => {
+            res.status(200).json({
+                order: order
+            });
+        })
+        .catch(err => {
+            console.log('err getting order data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
+app.post('/updateOrderByIdAdmin', (req, res) => {
+    const { orderId ,order} = req.body;
+
+    if (!order) {
+        res.json({
+            error: "Retry"
+        });
+    }
+
+    Order.findOne({ _id: orderId })
+        .then(order => {
+            // save order
+           order = Object.assign(order, req.body.order);
+              order.save()
+                .then(order => {
+                    res.status(200).json({
+                        order: order,
+                        message: "Order Updated Successfully"
+                    });
+                })
+
+        })
+        .catch(err => {
+            console.log('err getting order data from token ', err)
+            res.json({
+                error: "Server Error"
+            });
+        });
+});
+
 module.exports = app;
 
 

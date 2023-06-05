@@ -17,6 +17,8 @@ require('./MODELS/Quiz/SubjectQuizSchema');
 require('./MODELS/Quiz/CourseQuizSchema');
 require('./MODELS/Quiz/QuestionSchema');
 require('./MODELS/ProductSchema')
+require('./MODELS/OrderSchema');
+require('./MODELS/BannerSchema');
 
 require('./MODELS/PurchasesSchema');
 // 
@@ -28,6 +30,7 @@ const chapterRoutes = require('./ROUTES/chapterRoutes');
 const mediaRoutes = require('./ROUTES/mediaRoutes');
 const quizRoutes = require('./ROUTES/quizRoutes');
 const productRoutes = require('./ROUTES/productRoutes');
+const bannerRoutes = require('./ROUTES/bannerRoutes');
 
 // const subjectRoutes = require('./ROUTES/subjectRoutes');
 const bodyParser = require('body-parser');
@@ -50,6 +53,7 @@ app.use(courseRoutes)
 app.use(chapterRoutes)
 app.use(quizRoutes)
 app.use(productRoutes)
+app.use(bannerRoutes)
 app.use("/api/v1/media", mediaRoutes);
 app.use("/public", express.static(path.join(__dirname, "public")));
 // app.use(subjectRoutes)

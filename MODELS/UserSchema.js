@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 
 const User = new mongoose.Schema({
     // name, mobile, age, password
-    profilePic : {
+    profilePic: {
         type: String,
         default: 'noimage'
     },
@@ -39,8 +39,21 @@ const User = new mongoose.Schema({
     userCart: {
         type: Array,
         default: []
+    },
+    address: {
+        type: Object,
+        default: {
+            AddressLine1: "",
+            AddressLine2: "",
+            City: "",
+            State: "",
+            Pincode: ""
+        }
+    },
+    orders: {
+        type: Array,
+        default: []
     }
-
 },
     {
         timestamps: true
