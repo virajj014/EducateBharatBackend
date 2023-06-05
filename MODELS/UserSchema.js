@@ -35,6 +35,10 @@ const User = new mongoose.Schema({
     testScores: {
         type: Array,
         default: []
+    },
+    userCart: {
+        type: Array,
+        default: []
     }
 
 },

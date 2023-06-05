@@ -5,13 +5,14 @@ const User = mongoose.model('User');
 const Purchase = mongoose.model('Purchase');
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 
 app.post('/signup', async (req, res) => {
-    const {  name,
+    const { name,
         email,
         password,
         age,
-        phone} = req.body;
+        phone } = req.body;
     if (!email || !password || !name || !age || !phone) {
         return res.status(422).json({ error: "Please add all the fields" })
     }
@@ -142,11 +143,11 @@ app.get('/latestusers', (req, res) => {
         .then(users => {
             users.forEach(user => {
                 user.password = undefined;
-                if(!user.profilePic){
+                if (!user.profilePic) {
                     user.profilePic = "noimage";
                 }
             });
-            res.json({ users: users , message: "success"});
+            res.json({ users: users, message: "success" });
         }
         )
         .catch(err => {
@@ -161,7 +162,7 @@ app.get('/latestusers', (req, res) => {
 // BUY COURSE
 app.post('/buyCourse', (req, res) => {
     const token = req.headers.authorization.split(" ")[1];
-    const {courseId , amount ,currency} = req.body;
+    const { courseId, amount, currency } = req.body;
     if (!courseId || !token) {
         return res.status(422).json({ error: "Please add all the fields" });
     }
@@ -176,16 +177,16 @@ app.post('/buyCourse', (req, res) => {
                     savedUser.save()
                         .then(user => {
                             const purchase = new Purchase({
-                                
-                                item : {
-                                    type : 'course',
-                                    courseId : courseId
+
+                                item: {
+                                    type: 'course',
+                                    courseId: courseId
                                 },
                                 userId: savedUser._id,
                                 amount: amount,
                                 currency: currency,
                             });
-                            
+
                             purchase.save()
                                 .then(purchase => {
                                     res.json({ message: "Course Bought Successfully" });
@@ -206,6 +207,104 @@ app.post('/buyCourse', (req, res) => {
             })
     }
 
+});
+
+// add to cart
+app.post('/addToCart', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+
+    const { fullproduct,
+        price,
+        quantity } = req.body;
+
+    if (!fullproduct || !price || !quantity) {
+        return res.status(422).json({ error: "Retry" });
+    }
+
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const { _id } = data;
+    User.findOne({ _id: _id })
+        .then(async savedUser => {
+            if (savedUser) {
+                // console.log(savedUser);
+                let cartitemId = uuidv4();
+                savedUser.userCart.push({
+                    fullproduct,
+                    price,
+                    quantity,
+                    cartitemId
+                });
+                savedUser.save()
+                    .then(user => {
+                        res.json({ message: "Added to cart Successfully", userCart: user.userCart });
+                    })
+                    .catch(err => {
+                        // console.log(err);
+                        return res.status(422).json({ error: "Server Error" });
+
+                    })
+            }
+            else {
+                return res.status(422).json({ error: "Invalid Credentials" });
+            }
+        })
+        .catch(err => {
+            console.log(err);
+            return res.status(422).json({ error: "Server Error" });
+        })
+
+
+});
+app.get('/getCart', (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    if (token == "null") {
+        res.json({
+            error: "Invalid Token"
+        });
+    }
+    else {
+        const token = req.headers.authorization.split(" ")[1];
+        const data = jwt.verify(token, process.env.JWT_SECRET);
+        const { _id } = data;
+        User.findOne({ _id: _id })
+            .then(user => {
+                res.status(200).json({
+                    userCart: user.userCart
+                });
+            })
+            .catch(err => {
+                console.log('err getting user data from token ', err)
+            })
+    }
+});
+app.delete('/deleteCart', (req, res) => {
+   const token = req.headers.authorization.split(" ")[1];
+    const { cartitemId } = req.body;
+
+    if (!cartitemId) {
+        res.json({
+            error: "Retry"
+        });
+    }
+    else {
+        const data = jwt.verify(token, process.env.JWT_SECRET);
+        const { _id } = data;
+        User.findOne({ _id: _id })
+            .then(user => {
+                user.userCart = user.userCart.filter(cart => cart.cartitemId !== cartitemId);
+                user.save()
+                    .then(user => {
+                        res.json({ message: "Deleted Successfully" , userCart: user.userCart});
+                    })
+                    .catch(err => {
+                        console.log(err);
+                        return res.status(422).json({ error: "Server Error" });
+                    })
+            })
+            .catch(err => {
+                console.log('err getting user data from token ', err)
+            })
+    }
 });
 module.exports = app;
 
